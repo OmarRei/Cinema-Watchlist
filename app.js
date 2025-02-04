@@ -228,3 +228,43 @@ function importList(event) {
     reader.readAsText(file);
     event.target.value = '';
 }
+function loadItems() {
+    const items = JSON.parse(localStorage.getItem('watchList') || '[]');
+    // Sort items by date added (newest first)
+    items.sort((a, b) => new Date(b.added) - new Date(a.added));
+    const list = document.getElementById('watchList');
+    list.innerHTML = '';
+    
+    items.forEach(item => renderItem(item));
+    filterItems();
+}
+
+function addItem() {
+    const titleInput = document.getElementById('titleInput');
+    const imageInput = document.getElementById('imageInput');
+    const typeSelect = document.getElementById('typeSelect');
+
+    const newItem = {
+        id: Date.now(),
+        title: titleInput.value.trim(),
+        image: imageInput.value.trim(),
+        type: typeSelect.value,
+        status: 'unwatched',
+        rating: 0,
+        added: new Date().toISOString()  // Ensure added date is stored
+    };
+
+    if (!newItem.title) {
+        alert('Please enter a title');
+        return;
+    }
+
+    const items = JSON.parse(localStorage.getItem('watchList') || '[]');
+    items.push(newItem);
+    localStorage.setItem('watchList', JSON.stringify(items));
+    
+    loadItems(); // Changed from renderItem() to loadItems()
+    titleInput.value = '';
+    imageInput.value = '';
+    titleInput.focus();
+}
