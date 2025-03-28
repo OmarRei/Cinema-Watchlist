@@ -1,4 +1,6 @@
+const OMDB_API_KEY = 'a9825a05'; // OMDB API key
 let currentEditId = null;
+let searchTimeout = null;
 
 document.addEventListener('DOMContentLoaded', () => {
     loadItems();
@@ -6,8 +8,16 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initEventListeners() {
-    document.getElementById('titleInput').addEventListener('keypress', e => {
-        if (e.key === 'Enter') addItem();
+    const titleInput = document.getElementById('titleInput');
+    
+    titleInput.addEventListener('keyup', e => {
+        if (e.key === 'Enter') {
+            addItem();
+            return;
+        }
+        
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => searchOMDB(titleInput.value), 500);
     });
 
     document.getElementById('editRating').addEventListener('click', e => {
@@ -19,10 +29,74 @@ function initEventListeners() {
             });
         }
     });
+
+    // Add click handler to hide suggestions when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('.title-input-container')) {
+            document.getElementById('suggestions').style.display = 'none';
+        }
+    });
+}
+
+async function searchOMDB(query) {
+    if (!query || query.length < 3) {
+        document.getElementById('suggestions').style.display = 'none';
+        return;
+    }
+
+    try {
+        const response = await fetch(`https://www.omdbapi.com/?s=${encodeURIComponent(query)}&apikey=${OMDB_API_KEY}`);
+        const data = await response.json();
+        
+        if (data.Search) {
+            showSuggestions(data.Search);
+        }
+    } catch (error) {
+        console.error('Error fetching OMDB data:', error);
+    }
+}
+
+function showSuggestions(results) {
+    const suggestionsContainer = document.getElementById('suggestions');
+    suggestionsContainer.innerHTML = '';
+    
+    results.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'suggestion-item';
+        div.innerHTML = `
+            <img src="${item.Poster !== 'N/A' ? item.Poster : 'placeholder-image.png'}" 
+                 class="suggestion-poster" 
+                 alt="${item.Title}">
+            <div class="suggestion-details">
+                <div class="suggestion-title">${item.Title}</div>
+                <div class="suggestion-year">${item.Year} - ${item.Type}</div>
+            </div>
+        `;
+        div.addEventListener('click', () => selectSuggestion(item));
+        suggestionsContainer.appendChild(div);
+    });
+    
+    suggestionsContainer.style.display = 'block';
+}
+
+async function selectSuggestion(item) {
+    // Get full details from OMDB
+    const response = await fetch(`https://www.omdbapi.com/?i=${item.imdbID}&apikey=${OMDB_API_KEY}`);
+    const details = await response.json();
+    
+    document.getElementById('titleInput').value = details.Title;
+    document.getElementById('imageInput').value = details.Poster !== 'N/A' ? details.Poster : '';
+    document.getElementById('typeSelect').value = details.Type === 'movie' ? 'movie' : 'show';
+    document.getElementById('suggestions').style.display = 'none';
+    
+    // Automatically add the item
+    addItem();
 }
 
 function loadItems() {
     const items = JSON.parse(localStorage.getItem('watchList') || '[]');
+    // Sort items by date added (newest first)
+    items.sort((a, b) => new Date(b.added) - new Date(a.added));
     const list = document.getElementById('watchList');
     list.innerHTML = '';
     
@@ -82,7 +156,7 @@ function addItem() {
         type: typeSelect.value,
         status: 'unwatched',
         rating: 0,
-        added: new Date().toISOString()
+        added: new Date().toISOString()  // Ensure added date is stored
     };
 
     if (!newItem.title) {
@@ -94,7 +168,7 @@ function addItem() {
     items.push(newItem);
     localStorage.setItem('watchList', JSON.stringify(items));
     
-    renderItem(newItem);
+    loadItems(); // Changed from renderItem() to loadItems()
     titleInput.value = '';
     imageInput.value = '';
     titleInput.focus();
@@ -227,44 +301,4 @@ function importList(event) {
     };
     reader.readAsText(file);
     event.target.value = '';
-}
-function loadItems() {
-    const items = JSON.parse(localStorage.getItem('watchList') || '[]');
-    // Sort items by date added (newest first)
-    items.sort((a, b) => new Date(b.added) - new Date(a.added));
-    const list = document.getElementById('watchList');
-    list.innerHTML = '';
-    
-    items.forEach(item => renderItem(item));
-    filterItems();
-}
-
-function addItem() {
-    const titleInput = document.getElementById('titleInput');
-    const imageInput = document.getElementById('imageInput');
-    const typeSelect = document.getElementById('typeSelect');
-
-    const newItem = {
-        id: Date.now(),
-        title: titleInput.value.trim(),
-        image: imageInput.value.trim(),
-        type: typeSelect.value,
-        status: 'unwatched',
-        rating: 0,
-        added: new Date().toISOString()  // Ensure added date is stored
-    };
-
-    if (!newItem.title) {
-        alert('Please enter a title');
-        return;
-    }
-
-    const items = JSON.parse(localStorage.getItem('watchList') || '[]');
-    items.push(newItem);
-    localStorage.setItem('watchList', JSON.stringify(items));
-    
-    loadItems(); // Changed from renderItem() to loadItems()
-    titleInput.value = '';
-    imageInput.value = '';
-    titleInput.focus();
 }
